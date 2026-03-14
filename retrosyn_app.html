@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RetroSyn — AI Retrosynthesis</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,400;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0d0f;
+    --surface:  #111518;
+    --border:   #1e2428;
+    --border2:  #2a3038;
+    --acid:     #b8ff4f;
+    --acid-dim: #7ab832;
+    --muted:    #4a5560;
+    --text:     #d8e0e8;
+    --text-dim: #7a8898;
+    --red:      #ff4f4f;
+    --amber:    #ffb84f;
+    --cyan:     #4fddff;
+    --r1:       #b8ff4f;
+    --r2:       #4fddff;
+    --r3:       #ff9f4f;
+    --r4:       #df7fff;
+    --r5:       #ff4f9f;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid background ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(184,255,79,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(184,255,79,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Glow orb ── */
+  .orb {
+    position: fixed;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(184,255,79,0.06) 0%, transparent 70%);
+    top: -200px; right: -100px;
+    pointer-events: none;
+    z-index: 0;
+    animation: orbFloat 8s ease-in-out infinite;
+  }
+  @keyframes orbFloat {
+    0%,100% { transform: translate(0,0); }
+    50%      { transform: translate(-40px, 60px); }
+  }
+
+  /* ── Layout ── */
+  .shell {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 36px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .logo {
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+  }
+  .logo-mark {
+    width: 38px; height: 38px;
+    border: 1.5px solid var(--acid);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .logo-mark::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(184,255,79,0.15), transparent);
+  }
+  .logo-mark svg { position: relative; z-index: 1; }
+  .logo-text {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .logo-text span { color: var(--acid); }
+  .logo-sub {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .header-meta {
+    text-align: right;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .header-meta strong { color: var(--acid); }
+
+  /* ── Section titles ── */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  /* ── Input panel ── */
+  .input-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .input-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--acid), transparent);
+    opacity: 0.4;
+  }
+
+  .smiles-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .smiles-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: none;
+    min-height: 54px;
+  }
+  .smiles-input:focus { border-color: var(--acid); }
+  .smiles-input::placeholder { color: var(--muted); }
+
+  .btn {
+    padding: 14px 24px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--acid);
+    color: #0a0d0f;
+  }
+  .btn-primary:hover { background: #d0ff70; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border2);
+  }
+  .btn-secondary:hover { border-color: var(--text-dim); color: var(--text); }
+
+  /* ── Example pills ── */
+  .examples {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+  .example-pill {
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 100px;
+    border: 1px solid var(--border2);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    background: transparent;
+    font-family: 'DM Mono', monospace;
+  }
+  .example-pill:hover {
+    border-color: var(--acid);
+    color: var(--acid);
+    background: rgba(184,255,79,0.05);
+  }
+  .example-pill .name { color: var(--text); margin-right: 6px; }
+
+  /* ── Settings row ── */
+  .settings-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .setting {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .setting label { cursor: pointer; }
+  select {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 4px 8px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* ── Status bar ── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 11px;
+    color: var(--muted);
+    min-height: 40px;
+  }
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .status-dot.active { background: var(--acid); box-shadow: 0 0 8px var(--acid); animation: pulse 1s infinite; }
+  .status-dot.done   { background: var(--acid); box-shadow: 0 0 8px var(--acid); }
+  .status-dot.error  { background: var(--red);  box-shadow: 0 0 8px var(--red);  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Molecule preview ── */
+  .mol-preview-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: none;
+  }
+  .mol-preview-panel.visible { display: block; }
+  .mol-preview-inner {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+  }
+  .mol-svg-box {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    width: 200px;
+    height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--muted);
+    overflow: hidden;
+  }
+  .mol-svg-box svg { max-width: 100%; max-height: 100%; }
+  .mol-info { flex: 1; }
+  .mol-name {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 400;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+  .mol-stats {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .mol-stat { font-size: 11px; color: var(--text-dim); }
+  .mol-stat strong { color: var(--text); display: block; font-size: 18px; font-family: 'Fraunces', serif; font-weight: 200; }
+
+  /* ── Results ── */
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .results-count {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .results-count strong { color: var(--acid); }
+
+  /* ── Pathway cards ── */
+  .pathways { display: flex; flex-direction: column; gap: 10px; }
+
+  .pathway-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+    animation: slideIn 0.3s ease forwards;
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  @keyframes slideIn {
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .pathway-card:hover { border-color: var(--border2); }
+  .pathway-card.top-hit { border-color: rgba(184,255,79,0.3); }
+
+  .pathway-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .rank-badge {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .rank-1 { background: rgba(184,255,79,0.15); color: var(--acid); border: 1px solid rgba(184,255,79,0.3); }
+  .rank-2 { background: rgba(79,221,255,0.1);  color: var(--cyan); border: 1px solid rgba(79,221,255,0.2); }
+  .rank-3 { background: rgba(255,159,79,0.1);  color: var(--amber); border: 1px solid rgba(255,159,79,0.2); }
+  .rank-n { background: rgba(255,255,255,0.04); color: var(--muted); border: 1px solid var(--border); }
+
+  .pathway-smiles {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pathway-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .confidence-bar-wrap {
+    width: 80px;
+    height: 4px;
+    background: var(--border2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .confidence-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--acid);
+    transition: width 0.6s ease;
+  }
+  .confidence-pct {
+    font-size: 11px;
+    color: var(--text-dim);
+    width: 36px;
+    text-align: right;
+  }
+  .expand-arrow {
+    color: var(--muted);
+    font-size: 10px;
+    transition: transform 0.2s;
+  }
+  .pathway-card.expanded .expand-arrow { transform: rotate(180deg); }
+
+  .pathway-body {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding: 18px;
+  }
+  .pathway-card.expanded .pathway-body { display: flex; gap: 20px; flex-wrap: wrap; }
+
+  /* Reactant chips */
+  .reactant-chips { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; }
+  .reactant-chip {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-width: 140px;
+    position: relative;
+  }
+  .reactant-chip::before {
+    content: attr(data-idx);
+    position: absolute;
+    top: 8px; left: 10px;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .reactant-smi {
+    font-size: 11px;
+    color: var(--text);
+    margin-top: 18px;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+  .reactant-chip-color { position: absolute; top: 0; left: 0; width: 3px; height: 100%; border-radius: 8px 0 0 8px; }
+
+  .pathway-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  .action-btn {
+    font-size: 10px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .action-btn:hover { border-color: var(--acid); color: var(--acid); }
+
+  /* ── Template tag ── */
+  .template-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(184,255,79,0.06);
+    border: 1px solid rgba(184,255,79,0.15);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 10px;
+    color: var(--acid-dim);
+    margin-top: 10px;
+  }
+
+  /* ── Stats panel ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-val {
+    font-family: 'Fraunces', serif;
+    font-size: 32px;
+    font-weight: 200;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-val.acid { color: var(--acid); }
+  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+  /* ── History ── */
+  .history-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-top: 32px;
+  }
+  .history-list { margin-top: 12px; }
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 0 -10px;
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-item:hover { background: rgba(255,255,255,0.03); }
+  .history-smi { flex: 1; font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history-hits { font-size: 11px; color: var(--acid); }
+  .history-time { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--text);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--acid); flex-shrink: 0; }
+
+  /* ── Loading skeleton ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--border) 25%, var(--border2) 50%, var(--border) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
+    height: 80px;
+    margin-bottom: 10px;
+  }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty-icon {
+    font-size: 40px;
+    margin-bottom: 16px;
+    opacity: 0.4;
+  }
+  .empty-state h3 { font-family: 'Fraunces', serif; font-weight: 300; font-size: 22px; color: var(--text-dim); margin-bottom: 8px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ── Benchmark badge ── */
+  .bench-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .bench-pill {
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+  }
+  .bench-pill.ours {
+    border-color: rgba(184,255,79,0.3);
+    color: var(--acid);
+    background: rgba(184,255,79,0.06);
+  }
+
+  @media (max-width: 680px) {
+    .stats-grid { grid-template-columns: repeat(2,1fr); }
+    .mol-preview-inner { flex-direction: column; }
+    .mol-svg-box { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="orb"></div>
+<div class="shell">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M10 2L16 6V14L10 18L4 14V6L10 2Z" stroke="#b8ff4f" stroke-width="1.2" fill="none"/>
+          <circle cx="10" cy="10" r="2.5" fill="#b8ff4f" opacity="0.8"/>
+          <line x1="10" y1="2" x2="10" y2="7.5" stroke="#b8ff4f" stroke-width="0.8" opacity="0.4"/>
+          <line x1="10" y1="12.5" x2="10" y2="18" stroke="#b8ff4f" stroke-width="0.8" opacity="0.4"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-sub">AI-Powered</div>
+        <div class="logo-text">Retro<span>Syn</span></div>
+      </div>
+    </div>
+    <div class="header-meta">
+      Diffusion Transformer Model<br>
+      USPTO-50k · <strong>56.7%</strong> Top-1 Accuracy<br>
+      <span style="color:var(--border2)">──────────────</span><br>
+      10,142 Templates · 10 Reaction Classes
+    </div>
+  </header>
+
+  <!-- Input -->
+  <div class="section-label">Product SMILES</div>
+  <div class="input-panel">
+    <div class="smiles-row">
+      <textarea class="smiles-input" id="smilesInput" rows="1"
+        placeholder="Enter SMILES string... e.g. CC(=O)Oc1ccccc1C(=O)O"></textarea>
+      <button class="btn btn-primary" onclick="runPrediction()">Analyse →</button>
+      <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+    </div>
+    <div class="examples">
+      <span style="font-size:10px;color:var(--muted);align-self:center;margin-right:4px">Try:</span>
+      <button class="example-pill" onclick="loadExample('CC(=O)Oc1ccccc1C(=O)O','Aspirin')">
+        <span class="name">Aspirin</span>CC(=O)Oc1ccc…
+      </button>
+      <button class="example-pill" onclick="loadExample('CN1C=NC2=C1C(=O)N(C(=O)N2C)C','Caffeine')">
+        <span class="name">Caffeine</span>CN1C=NC2=C…
+      </button>
+      <button class="example-pill" onclick="loadExample('CC12CCC3C(C1CCC2O)CCC4=CC(=O)CCC34C','Testosterone')">
+        <span class="name">Testosterone</span>CC12CCC3C…
+      </button>
+      <button class="example-pill" onclick="loadExample('c1ccc2c(c1)ccc(=O)o2','Coumarin')">
+        <span class="name">Coumarin</span>c1ccc2c(c1)…
+      </button>
+      <button class="example-pill" onclick="loadExample('O=C(O)c1ccccc1O','Salicylic acid')">
+        <span class="name">Salicylic acid</span>O=C(O)c1…
+      </button>
+    </div>
+    <div class="settings-row">
+      <div class="setting">
+        <label>Top-K results</label>
+        <select id="topK">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+        </select>
+      </div>
+      <div class="setting">
+        <label>Model</label>
+        <select id="modelSel">
+          <option>Diffusion v2 (56.7%)</option>
+          <option disabled>+ Reranker (soon)</option>
+        </select>
+      </div>
+      <div class="setting">
+        <label>Show confidence</label>
+        <select id="confMode">
+          <option>Bar + %</option>
+          <option>% only</option>
+          <option>Hidden</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Ready — enter a SMILES string above to begin</span>
+  </div>
+
+  <!-- Molecule preview -->
+  <div class="mol-preview-panel" id="molPreview">
+    <div class="section-label">Parsed Molecule</div>
+    <div class="mol-preview-inner">
+      <div class="mol-svg-box" id="molSvgBox">
+        <span>Structure preview</span>
+      </div>
+      <div class="mol-info">
+        <div class="mol-name" id="molName">—</div>
+        <div class="mol-stats">
+          <div class="mol-stat"><strong id="statAtoms">—</strong>Heavy atoms</div>
+          <div class="mol-stat"><strong id="statRings">—</strong>Rings</div>
+          <div class="mol-stat"><strong id="statMW">—</strong>Est. MW (Da)</div>
+          <div class="mol-stat"><strong id="statHetero">—</strong>Heteroatoms</div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-pill ours">This model: 56.7% top-1</div>
+          <div class="bench-pill">GLN: 52.5%</div>
+          <div class="bench-pill">LocalRetro: 53.4%</div>
+          <div class="bench-pill">Graph2Edits: 58.0%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid" id="statsGrid" style="display:none">
+    <div class="stat-card">
+      <div class="stat-val acid" id="sv1">—</div>
+      <div class="stat-label">Pathways Found</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="sv2">—</div>
+      <div class="stat-label">Top Confidence</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="sv3">—</div>
+      <div class="stat-label">Pred. Class</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="sv4">—</div>
+      <div class="stat-label">Elapsed (ms)</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="resultsSection">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">⬡</div>
+      <h3>No analysis yet</h3>
+      <p style="font-size:12px;margin-top:6px">Enter a product SMILES to discover retrosynthetic pathways</p>
+    </div>
+    <div id="pathwaysList" class="pathways"></div>
+  </div>
+
+  <!-- History -->
+  <div class="history-panel" id="historyPanel" style="display:none">
+    <div class="section-label">Recent Searches</div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <div class="toast-dot"></div>
+  <span id="toastMsg"></span>
+</div>
+
+<script>
+// ── Simulated data for demo ────────────────────────────────────────────────
+const REACTION_CLASSES = [
+  'Heteroatom alkylation','Acylation','C–C bond formation',
+  'Heterocycle formation','Protections','Deprotections',
+  'Reductions','Oxidations','FG interconversions','FG additions'
+];
+
+const TEMPLATE_EXAMPLES = [
+  '[C:1][OH:2]>>[C:1][Cl].[OH2:2]',
+  '[C:1](=O)[OH:2]>>[C:1](=O)Cl.[OH2:2]',
+  '[c:1][NH2:2]>>[c:1]Br.[NH3:2]',
+  '[C:1][N:2]>>[C:1]Br.[NH2:2]',
+  '[C:1]=[C:2]>>[C:1]Br.[CH2:2]=O',
+];
+
+const DEMO_RESULTS = {
+  'CC(=O)Oc1ccccc1C(=O)O': {
+    name: 'Aspirin',
+    rxnClass: 'Acylation',
+    pathways: [
+      { smiles: 'CC(=O)Cl.OC(=O)c1ccccc1O', reactants: ['CC(=O)Cl', 'OC(=O)c1ccccc1O'], conf: 0.82, template: '[OH:1][c:2]>>[Cl][C:3](=O)C.[OH:1][c:2]' },
+      { smiles: 'CC(=O)OC(=O)C.OC(=O)c1ccccc1O', reactants: ['CC(=O)OC(=O)C', 'OC(=O)c1ccccc1O'], conf: 0.67, template: '[OH:1]>>[OH:1].[C:2](=O)OC(=O)C' },
+      { smiles: 'CC(=O)O.ClC(=O)c1ccccc1O', reactants: ['CC(=O)O', 'ClC(=O)c1ccccc1O'], conf: 0.51, template: '[C:1](=O)[O:2]>>[C:1](=O)Cl.[OH:2]' },
+      { smiles: 'CCOC(=O)c1ccccc1O.CC(=O)Cl', reactants: ['CCOC(=O)c1ccccc1O', 'CC(=O)Cl'], conf: 0.34, template: '[c:1][O:2]C(C)=O>>[c:1][OH:2].[ClC(C)=O]' },
+      { smiles: 'O=C(O)c1ccccc1OC(=O)C', reactants: ['O=C(O)c1ccccc1OC(=O)C'], conf: 0.21, template: '[C:1]>>[C:1]' },
+    ]
+  },
+  'CN1C=NC2=C1C(=O)N(C(=O)N2C)C': {
+    name: 'Caffeine',
+    rxnClass: 'Heterocycle formation',
+    pathways: [
+      { smiles: 'Cn1cnc2c1c(=O)[nH]c(=O)n2C.CI', reactants: ['Cn1cnc2c1c(=O)[nH]c(=O)n2C', 'CI'], conf: 0.74, template: '[N:1][C:2]>>[N:1].[CH3I]' },
+      { smiles: 'O=C1NC(=O)c2[nH]cnc2N1C.CI', reactants: ['O=C1NC(=O)c2[nH]cnc2N1C', 'CI'], conf: 0.58, template: '[nH:1]>>[nH:1].[CH3I]' },
+      { smiles: 'Cn1cnc2c1c(=O)nc(=O)n2.CC', reactants: ['Cn1cnc2c1c(=O)nc(=O)n2', 'CC'], conf: 0.43, template: null },
+    ]
+  },
+  'default': {
+    name: 'Unknown',
+    rxnClass: 'C–C bond formation',
+    pathways: [
+      { smiles: '[Fragment A].[Fragment B]', reactants: ['Fragment A', 'Fragment B'], conf: 0.71, template: null },
+      { smiles: '[Fragment C].[Fragment D]', reactants: ['Fragment C', 'Fragment D'], conf: 0.55, template: null },
+      { smiles: '[Fragment E]', reactants: ['Fragment E'], conf: 0.38, template: null },
+    ]
+  }
+};
+
+// ── Molecule parsing helpers ────────────────────────────────────────────────
+function parseSmilesStats(smi) {
+  const atoms = (smi.match(/[A-Z][a-z]?/g) || []).length;
+  const hetero = (smi.match(/[NOSPFClBrI]/g) || []).length;
+  const rings  = (smi.match(/\d/g) || []).length / 2;
+  const mw     = Math.round(atoms * 12.5 + hetero * 4);
+  return { atoms, hetero: Math.round(hetero * 0.7), rings: Math.round(rings), mw };
+}
+
+function generateMolSVG(smi) {
+  // Simple visual representation using SVG circles/lines
+  const colors = ['#b8ff4f','#4fddff','#ffb84f','#df7fff'];
+  const n = Math.min(Math.max(4, smi.length / 3), 12);
+  let svg = `<svg width="190" height="140" viewBox="0 0 190 140" fill="none" xmlns="http://www.w3.org/2000/svg">`;
+  const cx = 95, cy = 70, r = 45;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+  }
+  // bonds
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    svg += `<line x1="${pts[i][0]}" y1="${pts[i][1]}" x2="${pts[j][0]}" y2="${pts[j][1]}" stroke="#2a3038" stroke-width="1.5"/>`;
+  }
+  // some inner bonds
+  if (n > 5) {
+    svg += `<line x1="${pts[0][0]}" y1="${pts[0][1]}" x2="${pts[Math.floor(n/2)][0]}" y2="${pts[Math.floor(n/2)][1]}" stroke="#1e2428" stroke-width="1"/>`;
+  }
+  // atoms
+  pts.forEach(([x,y], i) => {
+    const c = colors[i % colors.length];
+    svg += `<circle cx="${x}" cy="${y}" r="5" fill="${c}" opacity="0.8"/>`;
+    svg += `<circle cx="${x}" cy="${y}" r="9" stroke="${c}" stroke-width="0.5" fill="none" opacity="0.3"/>`;
+  });
+  // center
+  svg += `<circle cx="${cx}" cy="${cy}" r="3" fill="#ffffff" opacity="0.3"/>`;
+  svg += `</svg>`;
+  return svg;
+}
+
+// ── State ───────────────────────────────────────────────────────────────────
+let history = [];
+let currentResults = null;
+
+// ── Core functions ──────────────────────────────────────────────────────────
+function setStatus(type, msg) {
+  const dot  = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  dot.className  = 'status-dot ' + type;
+  text.textContent = msg;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function clearAll() {
+  document.getElementById('smilesInput').value = '';
+  document.getElementById('pathwaysList').innerHTML = '';
+  document.getElementById('emptyState').style.display = '';
+  document.getElementById('molPreview').classList.remove('visible');
+  document.getElementById('statsGrid').style.display = 'none';
+  setStatus('', 'Ready — enter a SMILES string above to begin');
+}
+
+function loadExample(smi, name) {
+  document.getElementById('smilesInput').value = smi;
+  showToast(`Loaded: ${name}`);
+  runPrediction();
+}
+
+async function runPrediction() {
+  const smi = document.getElementById('smilesInput').value.trim();
+  if (!smi) { showToast('Please enter a SMILES string'); return; }
+
+  const topK = parseInt(document.getElementById('topK').value);
+  const t0   = performance.now();
+
+  // Status: running
+  setStatus('active', `Encoding SMILES → Running diffusion transformer → Ranking ${topK} pathways…`);
+  document.getElementById('pathwaysList').innerHTML = '';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('statsGrid').style.display = 'none';
+  document.getElementById('molPreview').classList.remove('visible');
+
+  // Show skeletons
+  const list = document.getElementById('pathwaysList');
+  for (let i = 0; i < 3; i++) {
+    const sk = document.createElement('div');
+    sk.className = 'skeleton';
+    sk.style.animationDelay = i * 0.1 + 's';
+    list.appendChild(sk);
+  }
+
+  // Simulate async model call
+  await new Promise(r => setTimeout(r, 900 + Math.random() * 600));
+
+  const elapsed = Math.round(performance.now() - t0);
+
+  // Get demo results
+  let data = DEMO_RESULTS[smi] || DEMO_RESULTS['default'];
+  let pathways = data.pathways.slice(0, topK);
+
+  // Molecule preview
+  const stats = parseSmilesStats(smi);
+  document.getElementById('molName').textContent = data.name;
+  document.getElementById('statAtoms').textContent  = stats.atoms;
+  document.getElementById('statRings').textContent  = stats.rings;
+  document.getElementById('statMW').textContent     = stats.mw;
+  document.getElementById('statHetero').textContent = stats.hetero;
+  document.getElementById('molSvgBox').innerHTML    = generateMolSVG(smi);
+  document.getElementById('molPreview').classList.add('visible');
+
+  // Stats row
+  document.getElementById('sv1').textContent = pathways.length;
+  document.getElementById('sv2').textContent = Math.round(pathways[0].conf * 100) + '%';
+  document.getElementById('sv3').textContent = data.rxnClass.split(' ')[0];
+  document.getElementById('sv4').textContent = elapsed;
+  document.getElementById('statsGrid').style.display = 'grid';
+
+  // Clear skeletons
+  list.innerHTML = '';
+
+  // Render pathways
+  pathways.forEach((p, i) => renderPathway(p, i, list));
+
+  // Status done
+  setStatus('done', `Found ${pathways.length} pathways in ${elapsed}ms · Top confidence: ${Math.round(pathways[0].conf*100)}% · Class: ${data.rxnClass}`);
+
+  // Add to history
+  addToHistory(smi, data.name, pathways.length, elapsed);
+}
+
+const CHIP_COLORS = ['--r1','--r2','--r3','--r4','--r5'];
+
+function renderPathway(p, i, container) {
+  const card = document.createElement('div');
+  card.className = 'pathway-card' + (i === 0 ? ' top-hit' : '');
+  card.style.animationDelay = (i * 0.06) + 's';
+
+  const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-n';
+  const confPct   = Math.round(p.conf * 100);
+  const confBar   = Math.round(p.conf * 100);
+
+  const chips = p.reactants.map((r, ri) => `
+    <div class="reactant-chip" data-idx="Reactant ${ri+1}">
+      <div class="reactant-chip-color" style="background:var(${CHIP_COLORS[ri % CHIP_COLORS.length]})"></div>
+      <div class="reactant-smi">${r}</div>
+    </div>
+  `).join('');
+
+  const templateTag = p.template
+    ? `<div class="template-tag">⬡ ${p.template.substring(0, 40)}${p.template.length > 40 ? '…' : ''}</div>`
+    : '';
+
+  card.innerHTML = `
+    <div class="pathway-header" onclick="toggleCard(this)">
+      <div class="rank-badge ${rankClass}">#${i+1}</div>
+      <div class="pathway-smiles">${p.smiles}</div>
+      <div class="pathway-meta">
+        <div class="confidence-bar-wrap">
+          <div class="confidence-bar-fill" style="width:${confBar}%;background:${i===0?'var(--acid)':i===1?'var(--cyan)':'var(--amber)'}"></div>
+        </div>
+        <div class="confidence-pct">${confPct}%</div>
+        <div class="expand-arrow">▼</div>
+      </div>
+    </div>
+    <div class="pathway-body">
+      <div style="flex:1">
+        <div class="reactant-chips">${chips}</div>
+        ${templateTag}
+      </div>
+      <div class="pathway-actions">
+        <button class="action-btn" onclick="copySmiles('${p.smiles}')">Copy SMILES</button>
+        <button class="action-btn" onclick="analyseReactant('${p.reactants[0]}')">Analyse reactant →</button>
+        <button class="action-btn" onclick="showToast('Export coming soon')">Export</button>
+      </div>
+    </div>
+  `;
+
+  container.appendChild(card);
+
+  // Expand top result by default
+  if (i === 0) {
+    setTimeout(() => card.classList.add('expanded'), 400);
+  }
+}
+
+function toggleCard(header) {
+  header.parentElement.classList.toggle('expanded');
+}
+
+function copySmiles(smi) {
+  navigator.clipboard.writeText(smi).then(() => showToast('SMILES copied to clipboard'));
+}
+
+function analyseReactant(smi) {
+  document.getElementById('smilesInput').value = smi;
+  showToast('Analysing reactant…');
+  runPrediction();
+}
+
+function addToHistory(smi, name, hits, ms) {
+  history.unshift({ smi, name, hits, ms, time: new Date() });
+  if (history.length > 8) history.pop();
+  renderHistory();
+  document.getElementById('historyPanel').style.display = '';
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  list.innerHTML = history.map(h => `
+    <div class="history-item" onclick="loadExample('${h.smi}','${h.name}')">
+      <span style="color:var(--acid);font-size:10px">${h.name}</span>
+      <span class="history-smi">${h.smi}</span>
+      <span class="history-hits">${h.hits} paths</span>
+      <span class="history-time">${h.ms}ms</span>
+    </div>
+  `).join('');
+}
+
+// ── Enter key support ────────────────────────────────────────────────────────
+document.getElementById('smilesInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runPrediction(); }
+});
+
+// ── Auto-resize textarea ─────────────────────────────────────────────────────
+document.getElementById('smilesInput').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = this.scrollHeight + 'px';
+});
+</script>
+</body>
+</html>

@@ -15,9 +15,9 @@ export default function Logo() {
         alt="Logo"
         width={100}
         height={100}
-        className="w-auto h-10 md:h-14"
+        className="w-auto h-10 lg:h-14"
       />
-      <h1 className={`font-bold uppercase md:text-3xl font-lora text-white`}>
+      <h1 className={`font-bold uppercase lg:text-3xl font-lora text-white`}>
         kemjet
       </h1>
     </div>
